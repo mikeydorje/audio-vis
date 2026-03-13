@@ -1,0 +1,59 @@
+smbh.html
+  4faac8b70276592a 153
+mathematical-pony.html
+  4faac8b70276592a 58
+lattice.html
+  4faac8b70276592a 153
+sometimes.html
+  4faac8b70276592a 39
+phi.html
+  4faac8b70276592a 58
+index.html
+  4faac8b70276592a 160-172
+feigenbaum.html
+  4faac8b70276592a 58
+to-here-knows-when.html
+  4faac8b70276592a 39
+filament.html
+  4faac8b70276592a 153
+only-shallow.html
+  4faac8b70276592a 39
+blown-a-wish.html
+  4faac8b70276592a 39
+euler.html
+  4faac8b70276592a 58
+lotus.html
+  4faac8b70276592a 153
+i-only-said.html
+  4faac8b70276592a 39
+tau.html
+  4faac8b70276592a 74
+aevum.html
+  4faac8b70276592a 153
+spore.html
+  4faac8b70276592a 153
+pi.html
+  4faac8b70276592a 154
+when-you-sleep.html
+  4faac8b70276592a 39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.12",
+  "base_commit_sha": "6d239043b581fe7242760ef243b0791299ed25e9",
+  "prompts": {
+    "4faac8b70276592a": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "3f7f2014-cfa1-4439-9297-d406eb8d11ba",
+        "model": "unknown"
+      },
+      "human_author": "Mikey Dorje <mikeydorje@gmail.com>",
+      "messages": [],
+      "total_additions": 31,
+      "total_deletions": 18,
+      "accepted_lines": 31,
+      "overriden_lines": 0
+    }
+  }
+}
