@@ -157,5 +157,18 @@
       <div class="desc">Scattered dispersal. Dandelion-clock seeds caught in a breeze — pale green wisps lifting, floating, wandering apart.</div>
     </a>
   </div>
+  <button id="reset-hints" style="display:none;margin:48px auto 32px;padding:6px 16px;font-family:inherit;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,0.25);background:none;border:1px solid rgba(255,255,255,0.06);border-radius:8px;cursor:pointer;transition:all 0.3s" onmouseover="this.style.color='rgba(255,255,255,0.6)';this.style.borderColor='rgba(255,255,255,0.15)'" onmouseout="this.style.color='rgba(255,255,255,0.25)';this.style.borderColor='rgba(255,255,255,0.06)'">Reset Info Popups</button>
+  <script>
+  (function(){
+    var HINT_KEYS=['audio-vis-info-dismissed'];
+    var btn=document.getElementById('reset-hints');
+    function hasStored(){return HINT_KEYS.some(function(k){return localStorage.getItem(k)==='1';})}
+    if(hasStored())btn.style.display='block';
+    btn.addEventListener('click',function(){
+      HINT_KEYS.forEach(function(k){localStorage.removeItem(k);});
+      btn.style.display='none';
+    });
+  })();
+  </script>
 </body>
 </html>
