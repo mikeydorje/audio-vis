@@ -168,18 +168,24 @@ const valDisplays = {
 };
 
 // Live-update value displays
-Object.keys(sliders).forEach(key => {
-  // Randomize on page load
-  const min = parseInt(sliders[key].min);
-  const max = parseInt(sliders[key].max);
-  const val = Math.floor(min + Math.random() * (max - min));
-  sliders[key].value = val;
-  valDisplays[key].textContent = val;
+function randomizeSliders() {
+  Object.keys(sliders).forEach(k => {
+    const s = sliders[k];
+    const v = Math.floor(+s.min + Math.random() * (+s.max - +s.min));
+    s.value = v;
+    valDisplays[k].textContent = v;
+  });
+}
 
-  sliders[key].addEventListener('input', () => {
-    valDisplays[key].textContent = sliders[key].value;
+Object.keys(sliders).forEach(k => {
+  sliders[k].addEventListener('input', () => {
+    valDisplays[k].textContent = sliders[k].value;
   });
 });
+randomizeSliders();
+
+const randomizeBtn = document.getElementById('randomize-btn');
+if (randomizeBtn) randomizeBtn.addEventListener('click', randomizeSliders);
 
 // Compute interdependent derived values from the 4 seed params
 function computeSeedValues() {

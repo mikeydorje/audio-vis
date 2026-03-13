@@ -151,12 +151,24 @@ for (let i = 1; i <= 8; i++) {
   sliders[k] = document.getElementById(k);
   valDisplays[k] = document.getElementById(k + '-val');
 }
+function randomizeSliders() {
+  Object.keys(sliders).forEach(k => {
+    const s = sliders[k];
+    const v = Math.floor(+s.min + Math.random() * (+s.max - +s.min));
+    s.value = v;
+    valDisplays[k].textContent = v;
+  });
+}
+
 Object.keys(sliders).forEach(k => {
-  const s = sliders[k];
-  const v = Math.floor(+s.min + Math.random() * (+s.max - +s.min));
-  s.value = v; valDisplays[k].textContent = v;
-  s.addEventListener('input', () => { valDisplays[k].textContent = s.value; });
+  sliders[k].addEventListener('input', () => {
+    valDisplays[k].textContent = sliders[k].value;
+  });
 });
+randomizeSliders();
+
+const randomizeBtn = document.getElementById('randomize-btn');
+if (randomizeBtn) randomizeBtn.addEventListener('click', randomizeSliders);
 
 function computeSeedValues() {
   const winding    = sliders.p1.value / 100;

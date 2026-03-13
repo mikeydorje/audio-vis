@@ -6,7 +6,7 @@ const Recorder = (() => {
   'use strict';
 
   const FPS = 60;
-  const VIDEO_BITRATE = 50_000_000;
+  const VIDEO_BITRATE = 12_000_000;
   const AUDIO_BITRATE = 128_000;
   const FORMATS = [
     { name: '16x9', label: '16:9',  width: 1920, height: 1080 },
@@ -375,6 +375,30 @@ const Recorder = (() => {
     };
   }
 
+  // ===== Per-format render state =====
+  let renderQueue = [];
+  let processing = false;
+  let cachedFrameData = null;
+  let cachedConfig = null;
+  let cachedAudioBuffer = null;
+  let cachedSmoothing = 0.85;
+  let blobUrls = [];
+  let formatStates = {}; // keyed by format name
+
+  function resetFormatStates() {
+    blobUrls.forEach(u => URL.revokeObjectURL(u));
+    blobUrls = [];
+    cachedFrameData = null;
+    cachedConfig = null;
+    cachedAudioBuffer = null;
+    renderQueue = [];
+    processing = false;
+    FORMATS.forEach(f => {
+      formatStates[f.name] = { state: 'idle', blob: null, url: null, progress: 0 };
+    });
+  }
+  resetFormatStates();
+
   // ===== UI: Inject stylesheet =====
   function injectStyles() {
     const s = document.createElement('style');
@@ -412,58 +436,94 @@ const Recorder = (() => {
       #rec-overlay.active { display:flex; }
       .rec-title {
         font-size:13px; text-transform:uppercase; letter-spacing:3px;
-        color:#666; margin-bottom:40px;
+        color:#666; margin-bottom:32px;
       }
-      .rec-steps { width:340px; margin-bottom:32px; }
-      .rec-step {
+      .rec-formats { width:380px; }
+      .rec-format-card {
         display:flex; align-items:center; gap:12px;
-        padding:8px 0; font-size:13px; color:#555; transition:color 0.3s;
+        padding:14px 16px; margin-bottom:10px;
+        background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);
+        border-radius:10px; transition:border-color 0.3s;
       }
-      .rec-step.active { color:#b8b0e8; }
-      .rec-step.done { color:rgba(80,200,80,0.7); }
-      .rec-step-icon { width:20px; text-align:center; font-size:11px; }
-      .rec-progress {
-        width:340px; height:4px; background:rgba(255,255,255,0.06);
-        border-radius:2px; margin-bottom:32px; overflow:hidden;
+      .rec-format-card.rendering { border-color:rgba(123,111,219,0.3); }
+      .rec-format-card.done { border-color:rgba(80,200,80,0.25); }
+      .rec-format-card.error { border-color:rgba(255,80,80,0.25); }
+      .rec-format-info { flex:1; min-width:0; }
+      .rec-format-label {
+        font-size:14px; font-weight:500; color:#b8b0e8; margin-bottom:2px;
       }
-      .rec-progress-bar {
+      .rec-format-dims { font-size:11px; color:#555; }
+      .rec-format-progress {
+        width:100%; height:3px; background:rgba(255,255,255,0.06);
+        border-radius:2px; margin-top:8px; overflow:hidden; display:none;
+      }
+      .rec-format-progress.visible { display:block; }
+      .rec-format-bar {
         height:100%; width:0%;
         background:linear-gradient(90deg,#7b6fdb,#b8b0e8);
         border-radius:2px; transition:width 0.15s;
       }
-      .rec-cancel-btn {
-        padding:8px 24px; font-family:inherit; font-size:12px;
+      .rec-format-status {
+        font-size:10px; color:#555; margin-top:4px; display:none;
+        letter-spacing:0.5px;
+      }
+      .rec-format-status.visible { display:block; }
+      .rec-render-btn {
+        padding:6px 14px; font-family:inherit; font-size:11px;
         letter-spacing:1px; text-transform:uppercase;
-        color:rgba(255,255,255,0.4); background:none;
-        border:1px solid rgba(255,255,255,0.1); border-radius:8px;
-        cursor:pointer; transition:all 0.3s;
+        color:rgba(255,255,255,0.5); background:none;
+        border:1px solid rgba(255,255,255,0.12); border-radius:6px;
+        cursor:pointer; transition:all 0.3s; white-space:nowrap; flex-shrink:0;
       }
-      .rec-cancel-btn:hover {
-        color:#fff; border-color:rgba(255,80,80,0.4); background:rgba(255,50,50,0.15);
+      .rec-render-btn:hover:not(:disabled) {
+        color:#b8b0e8; border-color:rgba(123,111,219,0.4); background:rgba(123,111,219,0.1);
       }
-      .rec-downloads { text-align:center; }
-      .rec-downloads h3 {
-        font-size:13px; text-transform:uppercase; letter-spacing:3px;
-        color:#666; margin-bottom:28px; font-weight:500;
+      .rec-render-btn:disabled {
+        opacity:0.3; cursor:default;
       }
-      .rec-dl-link {
-        display:block; padding:12px 24px; margin:12px auto; max-width:340px;
-        font-family:inherit; font-size:13px; color:#b8b0e8;
-        background:rgba(123,111,219,0.1); border:1px solid rgba(123,111,219,0.2);
-        border-radius:10px; text-decoration:none; transition:all 0.3s;
+      .rec-render-btn.queued {
+        color:#7b6fdb; border-color:rgba(123,111,219,0.3);
       }
-      .rec-dl-link:hover {
+      .rec-render-btn.rendering {
+        color:#b8b0e8; border-color:rgba(123,111,219,0.4);
+        background:rgba(123,111,219,0.1);
+      }
+      .rec-dl-btn {
+        display:none; padding:6px 14px; font-family:inherit; font-size:11px;
+        letter-spacing:1px; text-transform:uppercase;
+        color:#b8b0e8; background:rgba(123,111,219,0.1);
+        border:1px solid rgba(123,111,219,0.2); border-radius:6px;
+        text-decoration:none; transition:all 0.3s; white-space:nowrap; flex-shrink:0;
+      }
+      .rec-dl-btn.visible { display:inline-block; }
+      .rec-dl-btn:hover {
         background:rgba(123,111,219,0.25); border-color:rgba(123,111,219,0.4); color:#fff;
       }
-      .rec-dl-size { color:#555; font-size:11px; margin-left:8px; }
-      .rec-close-btn {
-        margin-top:24px; padding:8px 24px; font-family:inherit; font-size:12px;
+      .rec-actions {
+        display:flex; gap:10px; justify-content:center;
+        margin-top:24px; width:380px;
+      }
+      .rec-action-btn {
+        padding:8px 20px; font-family:inherit; font-size:11px;
         letter-spacing:1px; text-transform:uppercase;
         color:rgba(255,255,255,0.4); background:none;
         border:1px solid rgba(255,255,255,0.1); border-radius:8px;
         cursor:pointer; transition:all 0.3s;
       }
-      .rec-close-btn:hover { color:#fff; background:rgba(255,255,255,0.08); }
+      .rec-action-btn:hover {
+        color:#fff; background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.2);
+      }
+      .rec-action-btn.all:hover {
+        color:#b8b0e8; border-color:rgba(123,111,219,0.4); background:rgba(123,111,219,0.1);
+      }
+      .rec-action-btn.cancel:hover {
+        color:#fff; border-color:rgba(255,80,80,0.4); background:rgba(255,50,50,0.15);
+      }
+      .rec-analyze-status {
+        font-size:11px; color:#555; letter-spacing:1px; text-align:center;
+        margin-bottom:16px; height:16px;
+      }
+      .rec-analyze-status.active { color:#b8b0e8; }
       .rec-unsupported {
         position:fixed; bottom:16px; right:60px; z-index:20;
         font-family:'Segoe UI',sans-serif; font-size:10px; color:#555;
@@ -478,7 +538,7 @@ const Recorder = (() => {
     recordBtn.id = 'rec-btn';
     recordBtn.title = 'Record video';
     recordBtn.innerHTML = '<div class="rec-dot"></div>';
-    recordBtn.addEventListener('click', startRecording);
+    recordBtn.addEventListener('click', openFormatPicker);
     document.body.appendChild(recordBtn);
 
     pauseBtn = document.createElement('button');
@@ -525,138 +585,268 @@ const Recorder = (() => {
     const st = S.playState;
     if (st === 'playing' && S.audioContext) {
       S.audioContext.suspend();
-      // Scene's canvas click handler sets playState, but we trigger it via the audioContext
-      // The scene checks audioContext.state in its loop, so suspending is enough.
-      // We also need to update playState — dispatch a click on the canvas to use existing logic.
       document.querySelector('canvas').click();
     } else if (st === 'paused') {
-      // Click the scene's play button to resume with current params
       const playBtn = document.getElementById('play-btn');
       if (playBtn) playBtn.click();
     }
   }
 
-  function showProgress() {
-    overlayEl.classList.add('active');
-    const steps = [
-      { id: 'analyze', text: 'Pre-analyzing audio' },
-      ...FORMATS.map(f => ({ id: f.name, text: `Rendering ${f.label} (${f.width}\u00d7${f.height})` })),
-    ];
-    overlayEl.innerHTML = `
-      <div class="rec-title">Recording</div>
-      <div class="rec-steps">
-        ${steps.map(s => `
-          <div class="rec-step" data-step="${s.id}">
-            <span class="rec-step-icon">\u25cb</span>
-            <span>${s.text}</span>
-          </div>
-        `).join('')}
-      </div>
-      <div class="rec-progress"><div class="rec-progress-bar" id="rec-bar"></div></div>
-      <button class="rec-cancel-btn" id="rec-cancel">Cancel</button>
-    `;
-    document.getElementById('rec-cancel').addEventListener('click', () => {
-      cancelRef.cancelled = true;
-    });
-  }
-
-  function setStepState(id, state) {
-    const el = overlayEl.querySelector(`[data-step="${id}"]`);
-    if (!el) return;
-    el.className = 'rec-step ' + state;
-    const icon = el.querySelector('.rec-step-icon');
-    icon.textContent = state === 'active' ? '\u25c9' : state === 'done' ? '\u2713' : '\u25cb';
-  }
-
-  function setProgress(pct) {
-    const bar = document.getElementById('rec-bar');
-    if (bar) bar.style.width = (pct * 100).toFixed(1) + '%';
-  }
-
-  function showDownloads(results, sceneName) {
-    const urls = [];
-    const fmt = (b) => b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : (b / 1024).toFixed(0) + ' KB';
-    const links = results.map(r => {
-      const url = URL.createObjectURL(r.blob);
-      urls.push(url);
-      const fname = sceneName + '-' + r.name + '.mp4';
-      return '<a class="rec-dl-link" href="' + url + '" download="' + fname + '">'
-           + '\u2b07 ' + fname + ' <span class="rec-dl-size">' + fmt(r.blob.size) + '</span></a>';
-    }).join('');
-
-    overlayEl.innerHTML =
-      '<div class="rec-downloads"><h3>Recording Complete</h3>'
-      + links
-      + '<button class="rec-close-btn" id="rec-close">Close</button></div>';
-
-    document.getElementById('rec-close').addEventListener('click', () => {
-      overlayEl.classList.remove('active');
-      overlayEl.innerHTML = '';
-      recording = false;
-      urls.forEach(u => URL.revokeObjectURL(u));
-    });
-  }
-
-  // ===== Main recording flow =====
-  async function startRecording() {
-    if (recording || !window.SCENE) return;
-    const S = window.SCENE;
-    if (!S.currentBuffer) return;
-
+  // ===== Format picker overlay =====
+  function openFormatPicker() {
+    if (!window.SCENE || !window.SCENE.currentBuffer) return;
     recording = true;
     cancelRef = { cancelled: false };
     recordBtn.style.display = 'none';
     pauseBtn.style.display = 'none';
-    showProgress();
+    resetFormatStates();
+    renderOverlay();
+    overlayEl.classList.add('active');
+  }
+
+  function renderOverlay() {
+    const sceneName = window.SCENE ? (window.SCENE.sceneName || 'scene') : 'scene';
+    overlayEl.innerHTML = `
+      <div class="rec-title">Render Video</div>
+      <div class="rec-analyze-status" id="rec-analyze"></div>
+      <div class="rec-formats">
+        ${FORMATS.map(f => `
+          <div class="rec-format-card" id="rec-card-${f.name}">
+            <div class="rec-format-info">
+              <div class="rec-format-label">${f.label}</div>
+              <div class="rec-format-dims">${f.width}\u00d7${f.height} \u00b7 ${FPS}fps</div>
+              <div class="rec-format-progress" id="rec-prog-${f.name}">
+                <div class="rec-format-bar" id="rec-bar-${f.name}"></div>
+              </div>
+              <div class="rec-format-status" id="rec-status-${f.name}"></div>
+            </div>
+            <button class="rec-render-btn" id="rec-go-${f.name}"
+              data-fmt="${f.name}">Render</button>
+            <a class="rec-dl-btn" id="rec-dl-${f.name}">Download</a>
+          </div>
+        `).join('')}
+      </div>
+      <div class="rec-actions">
+        <button class="rec-action-btn all" id="rec-all">Render All</button>
+        <button class="rec-action-btn cancel" id="rec-cancel">Cancel</button>
+      </div>
+    `;
+
+    // Bind render buttons
+    FORMATS.forEach((f, i) => {
+      document.getElementById('rec-go-' + f.name).addEventListener('click', () => queueFormat(i));
+    });
+    document.getElementById('rec-all').addEventListener('click', () => {
+      FORMATS.forEach((f, i) => queueFormat(i));
+    });
+    document.getElementById('rec-cancel').addEventListener('click', cancelOrClose);
+  }
+
+  function cancelOrClose() {
+    const busy = processing || FORMATS.some(f =>
+      formatStates[f.name].state === 'rendering' || formatStates[f.name].state === 'queued');
+    if (busy) {
+      // Cancel: stop current render, clear queue
+      cancelRef.cancelled = true;
+      renderQueue.length = 0;
+      FORMATS.forEach(f => {
+        if (formatStates[f.name].state === 'queued') {
+          formatStates[f.name].state = 'idle';
+          updateCard(f.name);
+        }
+      });
+    } else {
+      // Close: nothing is rendering
+      closeOverlay();
+    }
+  }
+
+  function updateActionButton() {
+    const btn = document.getElementById('rec-cancel');
+    if (!btn) return;
+    const busy = processing || FORMATS.some(f =>
+      formatStates[f.name].state === 'rendering' || formatStates[f.name].state === 'queued');
+    btn.textContent = busy ? 'Cancel' : 'Close';
+    btn.className = 'rec-action-btn' + (busy ? ' cancel' : '');
+  }
+
+  function closeOverlay() {
+    overlayEl.classList.remove('active');
+    overlayEl.innerHTML = '';
+    recording = false;
+    // Keep blob URLs alive briefly so any in-progress downloads complete
+    const urls = blobUrls.slice();
+    blobUrls = [];
+    setTimeout(() => urls.forEach(u => URL.revokeObjectURL(u)), 30000);
+    resetFormatStates();
+  }
+
+  function updateCard(name) {
+    const st = formatStates[name];
+    const card = document.getElementById('rec-card-' + name);
+    const btn = document.getElementById('rec-go-' + name);
+    const dl = document.getElementById('rec-dl-' + name);
+    const prog = document.getElementById('rec-prog-' + name);
+    const bar = document.getElementById('rec-bar-' + name);
+    const status = document.getElementById('rec-status-' + name);
+    if (!card) return;
+
+    card.className = 'rec-format-card' + (st.state === 'rendering' ? ' rendering' : '')
+      + (st.state === 'done' ? ' done' : '') + (st.state === 'error' ? ' error' : '');
+
+    // Render button state
+    if (st.state === 'idle') {
+      btn.textContent = 'Render';
+      btn.disabled = false;
+      btn.className = 'rec-render-btn';
+      btn.style.display = '';
+    } else if (st.state === 'queued') {
+      btn.textContent = 'Queued';
+      btn.disabled = true;
+      btn.className = 'rec-render-btn queued';
+      btn.style.display = '';
+    } else if (st.state === 'rendering') {
+      btn.textContent = 'Rendering\u2026';
+      btn.disabled = true;
+      btn.className = 'rec-render-btn rendering';
+      btn.style.display = '';
+    } else if (st.state === 'done') {
+      btn.style.display = 'none';
+    } else if (st.state === 'error') {
+      btn.textContent = 'Retry';
+      btn.disabled = false;
+      btn.className = 'rec-render-btn';
+      btn.style.display = '';
+    }
+
+    // Progress bar
+    const showProgress = st.state === 'rendering' || st.state === 'done';
+    prog.className = 'rec-format-progress' + (showProgress ? ' visible' : '');
+    bar.style.width = (st.progress * 100).toFixed(1) + '%';
+
+    // Status text
+    if (st.state === 'rendering') {
+      status.className = 'rec-format-status visible';
+      status.textContent = Math.round(st.progress * 100) + '%';
+    } else if (st.state === 'done') {
+      status.className = 'rec-format-status visible';
+      const sz = st.blob ? st.blob.size : 0;
+      status.textContent = sz > 1048576 ? (sz / 1048576).toFixed(1) + ' MB' : (sz / 1024).toFixed(0) + ' KB';
+      status.style.color = 'rgba(80,200,80,0.7)';
+    } else if (st.state === 'error') {
+      status.className = 'rec-format-status visible';
+      status.textContent = 'Failed — try again';
+      status.style.color = 'rgba(255,80,80,0.7)';
+    } else {
+      status.className = 'rec-format-status';
+      status.style.color = '';
+    }
+
+    // Download button
+    if (st.state === 'done' && st.url) {
+      const sceneName = window.SCENE ? (window.SCENE.sceneName || 'scene') : 'scene';
+      dl.href = st.url;
+      dl.download = sceneName + '-' + name + '.mp4';
+      dl.textContent = '\u2b07 Download';
+      dl.className = 'rec-dl-btn visible';
+    } else {
+      dl.className = 'rec-dl-btn';
+    }
+
+    updateActionButton();
+  }
+
+  function setAnalyzeStatus(text, active) {
+    const el = document.getElementById('rec-analyze');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'rec-analyze-status' + (active ? ' active' : '');
+  }
+
+  // ===== Queue & process =====
+  function queueFormat(fmtIdx) {
+    const f = FORMATS[fmtIdx];
+    const st = formatStates[f.name];
+    if (st.state === 'rendering' || st.state === 'queued' || st.state === 'done') return;
+    st.state = 'queued';
+    st.progress = 0;
+    st.blob = null;
+    if (st.url) { URL.revokeObjectURL(st.url); st.url = null; }
+    updateCard(f.name);
+    renderQueue.push(fmtIdx);
+    processQueue();
+  }
+
+  async function processQueue() {
+    if (processing || renderQueue.length === 0) return;
+    processing = true;
+    cancelRef = { cancelled: false };
 
     try {
-      const config = snapshotConfig();
-      const audioBuffer = S.currentBuffer;
-      const smoothing = S.analyser ? S.analyser.smoothingTimeConstant : 0.85;
+      // Pre-analyze once (lazy, before first render)
+      if (!cachedFrameData) {
+        const S = window.SCENE;
+        if (!S || !S.currentBuffer) { processing = false; return; }
+        cachedConfig = snapshotConfig();
+        cachedAudioBuffer = S.currentBuffer;
+        cachedSmoothing = S.analyser ? S.analyser.smoothingTimeConstant : 0.85;
 
-      // Step 1: Pre-analyze audio
-      setStepState('analyze', 'active');
-      await new Promise(r => setTimeout(r, 50));
-      const frameData = preAnalyzeAudio(audioBuffer, smoothing, p => setProgress(p * 0.08));
-      setStepState('analyze', 'done');
-      setProgress(0.08);
-
-      if (cancelRef.cancelled) throw { cancelled: true };
-
-      // Steps 2–4: Record each format
-      const results = [];
-      for (let fi = 0; fi < FORMATS.length; fi++) {
-        if (cancelRef.cancelled) throw { cancelled: true };
-        const f = FORMATS[fi];
-        setStepState(f.name, 'active');
-        const base = 0.08 + fi * 0.307;
-        const blob = await recordFormat(config, frameData, f, audioBuffer, p => {
-          setProgress(base + p * 0.307);
-        });
-        if (cancelRef.cancelled || !blob) throw { cancelled: true };
-        results.push({ name: f.name, blob });
-        setStepState(f.name, 'done');
+        setAnalyzeStatus('Pre-analyzing audio\u2026', true);
+        await new Promise(r => setTimeout(r, 50));
+        cachedFrameData = preAnalyzeAudio(cachedAudioBuffer, cachedSmoothing);
+        setAnalyzeStatus('Audio analysis complete', false);
       }
 
-      showDownloads(results, config.sceneName);
+      while (renderQueue.length > 0) {
+        if (cancelRef.cancelled) break;
+
+        const fmtIdx = renderQueue.shift();
+        const f = FORMATS[fmtIdx];
+        const st = formatStates[f.name];
+
+        // Could have been cancelled while queued
+        if (st.state !== 'queued') continue;
+
+        st.state = 'rendering';
+        st.progress = 0;
+        updateCard(f.name);
+
+        try {
+          const blob = await recordFormat(cachedConfig, cachedFrameData, f, cachedAudioBuffer, p => {
+            st.progress = p;
+            updateCard(f.name);
+          });
+
+          if (cancelRef.cancelled || !blob) {
+            st.state = 'idle';
+            st.progress = 0;
+            updateCard(f.name);
+            continue;
+          }
+
+          st.state = 'done';
+          st.progress = 1;
+          st.blob = blob;
+          st.url = URL.createObjectURL(blob);
+          blobUrls.push(st.url);
+          updateCard(f.name);
+        } catch (err) {
+          console.error('Render failed for ' + f.name + ':', err);
+          st.state = 'error';
+          updateCard(f.name);
+        }
+      }
+
+      if (cancelRef.cancelled) {
+        setAnalyzeStatus('Cancelled', false);
+      }
     } catch (err) {
-      if (err && err.cancelled) {
-        overlayEl.classList.remove('active');
-        overlayEl.innerHTML = '';
-        recording = false;
-        return;
-      }
-      console.error('Recording failed:', err);
-      overlayEl.innerHTML =
-        '<div class="rec-downloads"><h3>Recording Failed</h3>'
-        + '<p style="color:#ff6666;font-size:13px;margin-bottom:20px">' + (err.message || err) + '</p>'
-        + '<button class="rec-close-btn" id="rec-close">Close</button></div>';
-      document.getElementById('rec-close').addEventListener('click', () => {
-        overlayEl.classList.remove('active');
-        overlayEl.innerHTML = '';
-        recording = false;
-      });
+      console.error('Processing error:', err);
+      setAnalyzeStatus('Error: ' + (err.message || err), false);
     }
+
+    processing = false;
+    updateActionButton();
   }
 
   // ===== Init =====
