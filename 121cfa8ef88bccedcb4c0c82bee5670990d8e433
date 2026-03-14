@@ -1,0 +1,25 @@
+recorder.js
+  4faac8b70276592a 549,604-605,640,645-652,654-655,659,661,663,665-666,674,678-686,692,696,700-714
+when-you-sleep.js
+  4faac8b70276592a 62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.12",
+  "base_commit_sha": "121cfa8ef88bccedcb4c0c82bee5670990d8e433",
+  "prompts": {
+    "4faac8b70276592a": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "3f7f2014-cfa1-4439-9297-d406eb8d11ba",
+        "model": "unknown"
+      },
+      "human_author": "Mikey Dorje <mikeydorje@gmail.com>",
+      "messages": [],
+      "total_additions": 53,
+      "total_deletions": 31,
+      "accepted_lines": 49,
+      "overriden_lines": 0
+    }
+  }
+}
