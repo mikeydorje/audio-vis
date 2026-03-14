@@ -542,25 +542,11 @@ const Recorder = (() => {
       .fmt-prev-btn:hover { color:rgba(255,255,255,0.6); border-color:rgba(255,255,255,0.15); }
       .fmt-prev-btn.active { color:#b8b0e8; border-color:rgba(123,111,219,0.4); background:rgba(123,111,219,0.15); }
       body.fmt-preview-active { background:#000 !important; overflow:hidden !important; }
-      #fmt-preview-wrap {
-        position:fixed; inset:0; z-index:10; display:none;
-        overflow:auto; background:#000;
-      }
-      #fmt-preview-wrap.active { display:flex; align-items:center; justify-content:center; }
-      #fmt-preview-wrap .fmt-canvas-frame {
-        flex-shrink:0;
+      body.fmt-preview-active canvas {
+        position:fixed !important; top:50% !important; left:50% !important;
+        transform:translate(-50%,-50%) !important;
         box-shadow:0 0 0 1px rgba(255,255,255,0.12);
-        line-height:0;
       }
-      /* custom scrollbars — thin translucent tracks, soft purple thumbs */
-      #fmt-preview-wrap::-webkit-scrollbar { width:6px; height:6px; }
-      #fmt-preview-wrap::-webkit-scrollbar-track { background:rgba(255,255,255,0.03); }
-      #fmt-preview-wrap::-webkit-scrollbar-thumb {
-        background:rgba(123,111,219,0.35); border-radius:3px;
-      }
-      #fmt-preview-wrap::-webkit-scrollbar-thumb:hover { background:rgba(123,111,219,0.55); }
-      #fmt-preview-wrap::-webkit-scrollbar-corner { background:transparent; }
-      #fmt-preview-wrap { scrollbar-width:thin; scrollbar-color:rgba(123,111,219,0.35) rgba(255,255,255,0.03); }
     `;
     document.head.appendChild(s);
   }
@@ -584,14 +570,6 @@ const Recorder = (() => {
     overlayEl = document.createElement('div');
     overlayEl.id = 'rec-overlay';
     document.body.appendChild(overlayEl);
-
-    // Format preview scroll wrapper + frame
-    const previewWrap = document.createElement('div');
-    previewWrap.id = 'fmt-preview-wrap';
-    const previewFrame = document.createElement('div');
-    previewFrame.className = 'fmt-canvas-frame';
-    previewWrap.appendChild(previewFrame);
-    document.body.appendChild(previewWrap);
 
     // Format preview toggle buttons
     const previewBar = document.createElement('div');
@@ -668,31 +646,23 @@ const Recorder = (() => {
   function activatePreview(fmt) {
     const S = window.SCENE;
     if (!S) return;
-    const canvas = document.querySelector('canvas');
-    if (!canvas) return;
 
     activePreviewFmt = fmt;
     document.body.classList.add('fmt-preview-active');
 
-    // Move canvas into the scroll wrapper frame
-    const wrap = document.getElementById('fmt-preview-wrap');
-    const frame = wrap.querySelector('.fmt-canvas-frame');
-    if (canvas.parentNode !== frame) frame.appendChild(canvas);
-    wrap.classList.add('active');
+    // Fit format aspect ratio into viewport
+    const aspect = fmt.width / fmt.height;
+    const maxW = window.innerWidth - 32;
+    const maxH = window.innerHeight - 32;
+    let w, h;
+    if (maxW / maxH > aspect) {
+      h = maxH; w = Math.round(h * aspect);
+    } else {
+      w = maxW; h = Math.round(w / aspect);
+    }
 
-    // Exact pixel resolution — not responsive, not scaled
-    applySceneSize(fmt.width, fmt.height);
+    applySceneSize(w, h);
 
-    // Pad wrapper so canvas is centered when smaller than viewport,
-    // scrollable when larger. Use min-width/min-height on the frame.
-    frame.style.minWidth = fmt.width + 'px';
-    frame.style.minHeight = fmt.height + 'px';
-
-    // Scroll to center
-    wrap.scrollLeft = (wrap.scrollWidth - wrap.clientWidth) / 2;
-    wrap.scrollTop = (wrap.scrollHeight - wrap.clientHeight) / 2;
-
-    // Update button states
     document.querySelectorAll('.fmt-prev-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.fmt === fmt.name);
     });
@@ -702,18 +672,7 @@ const Recorder = (() => {
     activePreviewFmt = null;
     document.body.classList.remove('fmt-preview-active');
 
-    // Move canvas back to body
-    const canvas = document.querySelector('canvas');
-    const wrap = document.getElementById('fmt-preview-wrap');
-    if (canvas && canvas.closest('#fmt-preview-wrap')) {
-      document.body.appendChild(canvas);
-    }
-    wrap.classList.remove('active');
-
-    // Restore full-window size
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    applySceneSize(w, h);
+    applySceneSize(window.innerWidth, window.innerHeight);
 
     document.querySelectorAll('.fmt-prev-btn').forEach(b => b.classList.remove('active'));
   }
@@ -726,12 +685,11 @@ const Recorder = (() => {
     }
   }
 
-  // Block scene resize handlers while preview is active — exact pixels, no scaling
+  // Block scene resize handlers while preview is active — re-fit to new window size
   window.addEventListener('resize', (e) => {
     if (activePreviewFmt) {
       e.stopImmediatePropagation();
-      // Re-apply exact preview size (renderer.setSize may have been disrupted)
-      applySceneSize(activePreviewFmt.width, activePreviewFmt.height);
+      activatePreview(activePreviewFmt);
     }
   }, true); // capturing phase — fires before scene handlers
 
