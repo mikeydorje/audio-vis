@@ -528,6 +528,39 @@ const Recorder = (() => {
         position:fixed; bottom:16px; right:60px; z-index:20;
         font-family:'Segoe UI',sans-serif; font-size:10px; color:#555;
       }
+      #fmt-preview-bar {
+        position:fixed; bottom:16px; right:148px; z-index:20;
+        display:none; gap:4px; align-items:center;
+      }
+      .fmt-prev-btn {
+        padding:4px 8px; font-family:'Segoe UI',sans-serif; font-size:10px;
+        letter-spacing:0.5px; color:rgba(255,255,255,0.3);
+        background:rgba(10,10,20,0.5); border:1px solid rgba(255,255,255,0.08);
+        border-radius:6px; cursor:pointer; transition:all 0.3s;
+        backdrop-filter:blur(6px); line-height:1;
+      }
+      .fmt-prev-btn:hover { color:rgba(255,255,255,0.6); border-color:rgba(255,255,255,0.15); }
+      .fmt-prev-btn.active { color:#b8b0e8; border-color:rgba(123,111,219,0.4); background:rgba(123,111,219,0.15); }
+      body.fmt-preview-active { background:#000 !important; overflow:hidden !important; }
+      #fmt-preview-wrap {
+        position:fixed; inset:0; z-index:10; display:none;
+        overflow:auto; background:#000;
+      }
+      #fmt-preview-wrap.active { display:flex; align-items:center; justify-content:center; }
+      #fmt-preview-wrap .fmt-canvas-frame {
+        flex-shrink:0;
+        box-shadow:0 0 0 1px rgba(255,255,255,0.12);
+        line-height:0;
+      }
+      /* custom scrollbars — thin translucent tracks, soft purple thumbs */
+      #fmt-preview-wrap::-webkit-scrollbar { width:6px; height:6px; }
+      #fmt-preview-wrap::-webkit-scrollbar-track { background:rgba(255,255,255,0.03); }
+      #fmt-preview-wrap::-webkit-scrollbar-thumb {
+        background:rgba(123,111,219,0.35); border-radius:3px;
+      }
+      #fmt-preview-wrap::-webkit-scrollbar-thumb:hover { background:rgba(123,111,219,0.55); }
+      #fmt-preview-wrap::-webkit-scrollbar-corner { background:transparent; }
+      #fmt-preview-wrap { scrollbar-width:thin; scrollbar-color:rgba(123,111,219,0.35) rgba(255,255,255,0.03); }
     `;
     document.head.appendChild(s);
   }
@@ -552,6 +585,28 @@ const Recorder = (() => {
     overlayEl.id = 'rec-overlay';
     document.body.appendChild(overlayEl);
 
+    // Format preview scroll wrapper + frame
+    const previewWrap = document.createElement('div');
+    previewWrap.id = 'fmt-preview-wrap';
+    const previewFrame = document.createElement('div');
+    previewFrame.className = 'fmt-canvas-frame';
+    previewWrap.appendChild(previewFrame);
+    document.body.appendChild(previewWrap);
+
+    // Format preview toggle buttons
+    const previewBar = document.createElement('div');
+    previewBar.id = 'fmt-preview-bar';
+    FORMATS.forEach(f => {
+      const btn = document.createElement('button');
+      btn.className = 'fmt-prev-btn';
+      btn.textContent = f.label;
+      btn.dataset.fmt = f.name;
+      btn.title = f.width + '\u00d7' + f.height + ' preview';
+      btn.addEventListener('click', () => togglePreview(f));
+      previewBar.appendChild(btn);
+    });
+    document.body.appendChild(previewBar);
+
     // Watch for slider changes — mark params dirty so rec hides until next play
     document.querySelectorAll('#controls input[type="range"]').forEach(el => {
       el.addEventListener('input', () => {
@@ -559,7 +614,7 @@ const Recorder = (() => {
       });
     });
 
-    // Poll playState to show/hide record + pause buttons
+    // Poll playState to show/hide record + pause + preview buttons
     setInterval(() => {
       if (!window.SCENE || recording) return;
       const st = window.SCENE.playState;
@@ -573,8 +628,12 @@ const Recorder = (() => {
       const showControls = (st === 'playing' || st === 'paused') && !paramsDirty;
       recordBtn.style.display = showControls ? 'flex' : 'none';
       pauseBtn.style.display = showControls ? 'flex' : 'none';
+      previewBar.style.display = showControls ? 'flex' : 'none';
       pauseBtn.innerHTML = st === 'paused' ? '\u25b6' : '\u2759\u2759';
       pauseBtn.title = st === 'paused' ? 'Resume' : 'Pause';
+
+      // Clear preview if controls hidden or playback stops
+      if (!showControls && activePreviewFmt) deactivatePreview();
     }, 200);
   }
 
@@ -592,9 +651,95 @@ const Recorder = (() => {
     }
   }
 
+  // ===== Format preview =====
+  let activePreviewFmt = null;
+
+  function applySceneSize(cssW, cssH) {
+    const S = window.SCENE;
+    if (!S) return;
+    S.camera.aspect = cssW / cssH;
+    S.camera.updateProjectionMatrix();
+    if (S.renderer) S.renderer.setSize(cssW, cssH);
+    if (S.uniforms && S.uniforms.uViewport) {
+      S.uniforms.uViewport.value.set(cssW, cssH);
+    }
+  }
+
+  function activatePreview(fmt) {
+    const S = window.SCENE;
+    if (!S) return;
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return;
+
+    activePreviewFmt = fmt;
+    document.body.classList.add('fmt-preview-active');
+
+    // Move canvas into the scroll wrapper frame
+    const wrap = document.getElementById('fmt-preview-wrap');
+    const frame = wrap.querySelector('.fmt-canvas-frame');
+    if (canvas.parentNode !== frame) frame.appendChild(canvas);
+    wrap.classList.add('active');
+
+    // Exact pixel resolution — not responsive, not scaled
+    applySceneSize(fmt.width, fmt.height);
+
+    // Pad wrapper so canvas is centered when smaller than viewport,
+    // scrollable when larger. Use min-width/min-height on the frame.
+    frame.style.minWidth = fmt.width + 'px';
+    frame.style.minHeight = fmt.height + 'px';
+
+    // Scroll to center
+    wrap.scrollLeft = (wrap.scrollWidth - wrap.clientWidth) / 2;
+    wrap.scrollTop = (wrap.scrollHeight - wrap.clientHeight) / 2;
+
+    // Update button states
+    document.querySelectorAll('.fmt-prev-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.fmt === fmt.name);
+    });
+  }
+
+  function deactivatePreview() {
+    activePreviewFmt = null;
+    document.body.classList.remove('fmt-preview-active');
+
+    // Move canvas back to body
+    const canvas = document.querySelector('canvas');
+    const wrap = document.getElementById('fmt-preview-wrap');
+    if (canvas && canvas.closest('#fmt-preview-wrap')) {
+      document.body.appendChild(canvas);
+    }
+    wrap.classList.remove('active');
+
+    // Restore full-window size
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    applySceneSize(w, h);
+
+    document.querySelectorAll('.fmt-prev-btn').forEach(b => b.classList.remove('active'));
+  }
+
+  function togglePreview(fmt) {
+    if (activePreviewFmt && activePreviewFmt.name === fmt.name) {
+      deactivatePreview();
+    } else {
+      activatePreview(fmt);
+    }
+  }
+
+  // Block scene resize handlers while preview is active — exact pixels, no scaling
+  window.addEventListener('resize', (e) => {
+    if (activePreviewFmt) {
+      e.stopImmediatePropagation();
+      // Re-apply exact preview size (renderer.setSize may have been disrupted)
+      applySceneSize(activePreviewFmt.width, activePreviewFmt.height);
+    }
+  }, true); // capturing phase — fires before scene handlers
+
   // ===== Format picker overlay =====
   function openFormatPicker() {
     if (!window.SCENE || !window.SCENE.currentBuffer) return;
+    // Clear any active preview first
+    if (activePreviewFmt) deactivatePreview();
     recording = true;
     cancelRef = { cancelled: false };
     recordBtn.style.display = 'none';

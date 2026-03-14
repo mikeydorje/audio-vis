@@ -326,7 +326,7 @@ function animate() {
 
 // --- Recorder API ---
 window.SCENE = {
-  scene, camera, uniforms, frequencyUniform,
+  scene, camera, renderer, uniforms, frequencyUniform,
   get particles() { return particles; },
   get seedCenter() { return seedCenter; },
   get rotSpeedY() { return rotSpeedY; },
