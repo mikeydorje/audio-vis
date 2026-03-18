@@ -1,0 +1,23 @@
+recorder.js
+  a49e7d204c204620 244-258,260,262-269,272,282-302,304,306-308,310-320,323,328,335-340,350-351,354,357-360,364,366,426-430,434,767-768,864-866,952-959,1012-1014
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "587e29995aca8cc40cf817f7160b90172e4b4901",
+  "prompts": {
+    "a49e7d204c204620": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "4754136a-3139-4748-a8f6-62a85391ac72",
+        "model": "unknown"
+      },
+      "human_author": "Mikey Dorje <mikeydorje@gmail.com>",
+      "messages": [],
+      "total_additions": 103,
+      "total_deletions": 16,
+      "accepted_lines": 101,
+      "overriden_lines": 0
+    }
+  }
+}
