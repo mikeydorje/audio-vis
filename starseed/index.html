@@ -73,12 +73,17 @@
       color: #555;
       line-height: 1.5;
     }
+    .about-lead {
+      max-width: 1200px;
+      margin: 64px auto 0;
+      padding: 0 40px;
+    }
     .about-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: 1fr 1fr;
       gap: 32px;
       max-width: 1200px;
-      margin: 64px auto 32px;
+      margin: 32px auto 32px;
       padding: 0 40px;
       align-items: start;
     }
@@ -88,16 +93,19 @@
       color: rgba(255,255,255,0.3);
       text-align: left;
     }
-    .about-grid > .about:nth-child(2) { padding: 0 20px; }
     @media (max-width: 860px) {
+      .about-lead {
+        max-width: 680px;
+        padding: 0 24px;
+      }
+      .about-lead .about { text-align: center; }
       .about-grid {
         grid-template-columns: 1fr;
         max-width: 680px;
         padding: 0 24px;
         gap: 48px;
       }
-      .about { text-align: center; }
-      .about-grid > .about:nth-child(2) { padding: 0; }
+      .about-grid .about { text-align: center; }
     }
     .about h2 {
       font-size: 11px;
@@ -293,21 +301,23 @@
   </div>
   <button id="reset-hints" style="display:none;margin:48px auto 0;padding:6px 16px;font-family:inherit;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,0.25);background:none;border:1px solid rgba(255,255,255,0.06);border-radius:8px;cursor:pointer;transition:all 0.3s" onmouseover="this.style.color='rgba(255,255,255,0.6)';this.style.borderColor='rgba(255,255,255,0.15)'" onmouseout="this.style.color='rgba(255,255,255,0.25)';this.style.borderColor='rgba(255,255,255,0.06)'">Reset Info Popups</button>
 
+  <div class="about-lead">
+  <div class="about">
+    <h2>The Basics</h2>
+    <p><strong>Starseed</strong> is an audio-reactive particle visualizer — upload a track or use your mic, and the visuals respond to your music in real time.</p>
+    <p>The eight control sliders per scene are <strong>intentionally abstract</strong> — names like <em>Epoch</em>, <em>Flux</em>, and <em>Tremolo</em> hint at their function. Some parameters ride slow time-based drift cycles and reveal themselves gradually. Move things around, hit <strong>Randomize</strong>, adjust the <strong>Aperture Scale</strong>, click <strong>Boundary</strong>, and let the scene surprise you.</p>
+    <p>Hit record and the app renders offline at <strong>60 fps</strong> using WebCodecs, muxing straight to MP4 — no server, no upload, everything stays in your browser. <strong>Listen mode</strong> skips the file and reacts directly to your microphone. On <strong>iOS</strong>, rendered videos won't include audio due to platform restrictions. Use your device's screen recording instead, or hop on a desktop to render with sound.</p>
+    <p><strong>Built for desktop</strong>, primarily tested on Windows/Chrome, MacOS/Chrome and iOS/Safari. Mobile works — fun with Listen mode — but for the full experience, a desktop browser is the way to go.</p>
+  </div>
+  </div>
+
   <div class="about-grid">
   <div class="about">
     <h2>How it works</h2>
-    <p>Starseed is an <strong>audio-reactive visualizer</strong> — every particle on screen moves in direct response to your music. Drop in any audio file, and the <strong>Web Audio API</strong> splits the signal into 64 frequency bands in real time. Those bands push, pull, and reshape a cloud of particles driven by <strong>custom GPU shaders</strong> every frame. <em>Modern hardware handles this easily; older machines or low-power devices may drop frames or slow down.</em></p>
+    <p>Starseed is an <strong>audio-reactive visualizer</strong> — every particle on screen moves in direct response to your music. Drop in any audio file, and the <strong>Web Audio API</strong> splits the signal into 64 frequency bands in real time. Those bands push, pull, and reshape a cloud of particles driven by <strong>custom GPU shaders</strong> every frame. <em>Everything runs on your device's GPU — modern hardware handles this easily, but low-power devices may drop frames.</em></p>
     <p>Eight sliders per scene let you tune the physics: spread, drift, colour, threshold, and more. Aspect ratio, aperture scale, and boundary settings can dynamically alter the visuals in unique ways. A <strong>narrative arc</strong> slowly evolves the parameters over the length of the track so the visuals tell a story.</p>
     <p>Behind the scenes, slow <strong>drift cycles</strong> — long sine waves between 1 and 5 minutes — continually shift rotation and scale. Combined with the arc, this means no two plays look the same.</p>
     <p>Built with <strong>♡︎</strong>, <strong>Three.js</strong>, <strong>WebGL</strong>, and zero build tools — <strong>plain JavaScript and GPU shader math</strong>. No AI, no machine learning, no server-side processing. Just code, trigonometry, and your music on static files. Developed on Windows Subsystem for Linux.</p>
-  </div>
-
-  <div class="about">
-    <h2>Quick Notes</h2>
-    <p><strong>Built for desktop</strong>, primarily tested on Windows/Chrome, MacOS/Chrome and iOS/Safari. Mobile works — fun with Listen mode — but for the full experience, a desktop browser is the way to go.</p>
-    <p>On <strong>iOS</strong>, rendered videos won't include audio due to platform restrictions. Use your device's screen recording instead, or hop on a desktop to render with sound.</p>
-    <p>Hit record and the app renders offline at <strong>60 fps</strong> using WebCodecs, muxing straight to MP4 — no server, no upload, everything stays in your browser. <strong>Listen mode</strong> skips the file and reacts directly to your microphone — every scene is audio-reactive, so anything it hears shapes the visuals in real time.</p>
-    <p>The eight control sliders per scene are <strong>intentionally abstract</strong> — names like <em>Epoch</em>, <em>Flux</em>, and <em>Tremolo</em> hint at their function. Some parameters ride slow time-based drift cycles and reveal themselves gradually. Move things around, hit <strong>Randomize</strong>, adjust the <strong>Aperture Scale</strong>, click <strong>Boundary</strong>, and let the scene surprise you.</p>
   </div>
 
   <div class="about">
@@ -326,6 +336,11 @@
   <div class="version-history">
     <h2>Version History</h2>
     <p class="version-lead">Actively evolving — new scenes, features, and refinements ongoing.</p>
+    <div class="version-entry">
+      <h3>v1.1.0 — April 2026</h3>
+      <p><em>Improved low-end frequency response.</em></p>
+      <p>Per-band bass smoothing across all scenes and the offline recorder. Tighter kick and bass transients. Updated integration tests.</p>
+    </div>
     <div class="version-entry">
       <h3>v1.0.1 — April 2026</h3>
       <p><em>Integration tests and UI polish.</em></p>
