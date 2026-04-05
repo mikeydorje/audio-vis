@@ -454,7 +454,7 @@ const Recorder = (() => {
     const s = document.createElement('style');
     s.textContent = `
       #rec-btn {
-        position:fixed; bottom:16px; right:60px; z-index:20;
+        position:fixed; bottom:16px; right:104px; z-index:20;
         width:36px; height:36px; padding:0;
         background:rgba(10,10,20,0.5); border:1px solid rgba(255,255,255,0.1);
         border-radius:8px; cursor:pointer;
@@ -466,7 +466,7 @@ const Recorder = (() => {
       }
       #rec-btn .rec-dot { width:14px; height:14px; border-radius:50%; background:currentColor; }
       #rec-pause-btn {
-        position:fixed; bottom:16px; right:16px; z-index:20;
+        position:fixed; bottom:16px; right:148px; z-index:20;
         width:36px; height:36px; padding:0;
         background:rgba(10,10,20,0.5); border:1px solid rgba(255,255,255,0.1);
         border-radius:8px; cursor:pointer;
@@ -695,7 +695,7 @@ const Recorder = (() => {
       }
       .rec-analyze-status.active { color:#b8b0e8; }
       .rec-unsupported {
-        position:fixed; bottom:16px; right:60px; z-index:20;
+        position:fixed; bottom:16px; right:104px; z-index:20;
         font-family:'Segoe UI',sans-serif; font-size:10px; color:#555;
       }
       body.fmt-preview-active { background:#000 !important; overflow:hidden !important; }
@@ -783,11 +783,13 @@ const Recorder = (() => {
       if ((st === 'playing' || st === 'listening') && lastPlayState !== st) {
         paramsDirty = false;
         syncPanelFromControls();
+        if (window.innerWidth < window.innerHeight) document.body.classList.add('toolbar-hidden');
         if (activePreviewFmt && _resizedDuringPreview) {
           _resizedDuringPreview = false;
           activatePreview(activePreviewFmt);
         } else if (!activePreviewFmt) {
-          activatePreview(FORMATS[0]);
+          const initFmt = window.innerWidth < window.innerHeight ? FORMATS[2] : FORMATS[0];
+          activatePreview(initFmt);
         }
       }
       lastPlayState = st;
@@ -1039,7 +1041,7 @@ const Recorder = (() => {
     S.vjActive = true;
 
     ctrlPopup = window.open('vj-controls.html', 'vjcontrols',
-      'width=340,height=900,resizable=yes,scrollbars=yes');
+      'width=340,height=580,resizable=yes,scrollbars=yes');
 
     if (!ctrlPopup) {
       S.vjActive = false;

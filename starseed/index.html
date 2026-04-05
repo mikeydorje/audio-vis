@@ -126,7 +126,7 @@
       font-size: 12px;
       line-height: 1.7;
       color: rgba(255,255,255,0.3);
-      text-align: center;
+      text-align: left;
     }
     .version-history h2 {
       font-size: 13px;
@@ -135,9 +135,11 @@
       color: #444;
       margin-bottom: 14px;
       font-weight: 400;
+      text-align: center;
     }
     .version-history .version-lead {
       margin: 0 0 28px;
+      text-align: center;
     }
     .version-history .version-entry {
       border-top: 1px solid rgba(255,255,255,0.06);
@@ -294,10 +296,10 @@
   <div class="about-grid">
   <div class="about">
     <h2>How it works</h2>
-    <p>Each scene is a cloud of particles driven by <strong>custom GPU shaders</strong>. Drop in an audio file and the <strong>Web Audio API</strong> splits the signal into 64 frequency bands in real time — those bands push, pull, and reshape the particles every frame. Modern hardware handles this easily; older machines or low-power devices may stutter or run warm.</p>
+    <p>Each scene is a cloud of particles driven by <strong>custom GPU shaders</strong>. Drop in an audio file and the <strong>Web Audio API</strong> splits the signal into 64 frequency bands in real time — those bands push, pull, and reshape the particles every frame. <em>Modern hardware handles this easily; older machines or low-power devices may stutter or run warm.</em></p>
     <p>Eight sliders per scene let you tune the physics: spread, drift, colour, threshold, and more. Aspect ratio, aperture scale, and boundary settings can dynamically alter the visuals in unique ways. A <strong>narrative arc</strong> slowly evolves the parameters over the length of the track so the visuals tell a story.</p>
     <p>Behind the scenes, slow <strong>drift cycles</strong> — long sine waves between 1 and 5 minutes — continually shift rotation and scale. Combined with the arc, this means no two plays look the same.</p>
-    <p>Built with ♡︎, <strong>Three.js</strong>, <strong>WebGL</strong>, and zero build tools — <strong>plain JavaScript and GPU shader math</strong>. No AI, no machine learning, no server-side processing. Just code, trigonometry, and your music on static files. Developed on Windows Subsystem for Linux.</p>
+    <p>Built with <strong>♡︎</strong>, <strong>Three.js</strong>, <strong>WebGL</strong>, and zero build tools — <strong>plain JavaScript and GPU shader math</strong>. No AI, no machine learning, no server-side processing. Just code, trigonometry, and your music on static files. Developed on Windows Subsystem for Linux.</p>
   </div>
 
   <div class="about">
@@ -317,7 +319,7 @@
     <h3>Ownership &amp; License</h3>
     <p>Your music remains 100% yours. Your final videos are yours to publish and monetize. Starseed source code is open source and licensed for reuse and modification under the project license terms.</p>
     <h3>Privacy</h3>
-    <p>Your audio <strong>never leaves your device</strong>. Files are decoded in the browser and cached in local storage for convenience — nothing is uploaded anywhere. For the smoothest experience, keep local browser storage enabled (cookies/local site data) so Starseed can remember your uploaded audio and dismissed tips.</p>
+    <p>Your audio never leaves your device. Files are decoded in the browser and cached in local storage — nothing is uploaded anywhere. For the smoothest experience, keep local browser storage enabled (cookies/local site data) so Starseed can remember your uploaded audio and dismissed tips.</p>
   </div>
   </div>
 
@@ -325,10 +327,16 @@
     <h2>Version History</h2>
     <p class="version-lead">Actively evolving — new scenes, features, and refinements ongoing.</p>
     <div class="version-entry">
+      <h3>v1.0.1 — April 2026</h3>
+      <p><em>Integration tests and UI polish.</em></p>
+      <p>Playwright end-to-end test suite — 65 tests covering UI state, math parity across scenes, and SCENE contract validation.</p>
+      <p>Minor UI adjustments: toolbar button layout, popout control panel sizing, version history formatting, index page text edits. Format preview now defaults to 9:16 on portrait viewports.</p>
+    </div>
+    <div class="version-entry">
       <h3>v1.0.0 (Beta) — April 2026</h3>
-      <p>18 scenes with control sliders, a narrative arc that shifts the visuals over the length of the track, and background drift cycles.</p>
-      <p>Playback from file upload or Listen mode (live mic input). Offline recording at 60 fps, rendered and muxed to MP4 entirely in the browser. Format preview overlays for 9:16, 1:1, and 4:5. Uploaded audio is cached locally between sessions.</p>
-      <p>Popout control panel for adjusting sliders during playback. Randomize button. Fullscreen toggle. Back-to-grid navigation.</p>
+      <p>18 audio-reactive particle scenes built on Three.js and WebGL. Each scene has 8 control sliders, a narrative arc that shifts the visuals over the length of the track, and background drift cycles.</p>
+      <p>Playback from file upload or Listen mode (live mic input). Offline MP4 recording at 60 fps, encoded and muxed in the browser via WebCodecs. Format preview for 16:9, 1:1, and 9:16. Audio cached locally via IndexedDB.</p>
+      <p>Popout control panel for live slider adjustment, randomize, and format selection. Fullscreen toggle. Static site — no server, no build tools, no tracking.</p>
     </div>
   </div>
 
