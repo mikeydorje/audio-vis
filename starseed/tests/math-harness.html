@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Math Parity Test Harness</title>
+</head>
+<body>
+  <canvas id="canvas" width="100" height="100"></canvas>
+  <!--
+    This harness exposes window.__TEST with pure-JS re-implementations of the
+    formulas used by both the live animate() loop and recorder.js setFrameState().
+    Playwright tests call these via page.evaluate() and compare outputs.
+  -->
+  <script>
+    'use strict';
+
+    // ── adjustedFov (exact copy from recorder.js L19-30) ──
+    const SQUARE_PSEUDO_ASPECT = 1920 / 1080;
+    function adjustedFov(baseFov, aspect, lock) {
+      const t = lock || 0;
+      const effectiveAspect = (t && aspect === 1) ? SQUARE_PSEUDO_ASPECT : aspect;
+      const rad = baseFov * Math.PI / 180;
+      const corrected = 2 * Math.atan(Math.tan(rad / 2) / effectiveAspect) * 180 / Math.PI;
+      if (effectiveAspect < 1) {
+        return corrected + (baseFov - corrected) * t;
+      }
+      return baseFov + (corrected - baseFov) * t;
+    }
+
+    // ── Drift calculation (shared formula in both animate() and setFrameState()) ──
+    function computeDrift(params) {
+      // params: { elapsed, DRIFT_BASE, audioDuration, driftCycles, seedCenter,
+      //           bakedFlux, _driftPhases, arcMult, uniformMap }
+      const TWO_PI = Math.PI * 2;
+      const _ad = params.audioDuration || 0;
+      const _ds = _ad > 0 ? params.DRIFT_BASE / Math.max(12, Math.min(120, _ad * 0.4)) : 1;
+      const dt = params.elapsed * _ds;
+      const _dp = params._driftPhases || {};
+      const results = {};
+
+      for (const key in params.driftCycles) {
+        const { period, depth } = params.driftCycles[key];
+        const sd = depth * (0.3 + params.bakedFlux * 1.4);
+        const drift = (Math.sin(dt * TWO_PI / period + (_dp[key] || 0)) * 0.65
+                     + Math.sin(dt * TWO_PI / (period * 2.17) + 1.3 + (_dp[key] || 0)) * 0.35) * sd;
+        const rawVal = Math.max(0.01, params.seedCenter[key] * (params.arcMult[key] || 1) * (1.0 + drift));
+        results[params.uniformMap[key]] = rawVal;
+      }
+      return results;
+    }
+
+    // ── Rotation (from setFrameState L237-243) ──
+    function computeRotation(params) {
+      // params: { elapsed, DRIFT_BASE, audioDuration, rotSpeedY, rotSpeedX, rotXMult,
+      //           rotYMult, rotDriftScale, tiltDriftScale, _driftPhases, arcMult }
+      const TWO_PI = Math.PI * 2;
+      const _ad = params.audioDuration || 0;
+      const _ds = _ad > 0 ? params.DRIFT_BASE / Math.max(12, Math.min(120, _ad * 0.4)) : 1;
+      const dt = params.elapsed * _ds;
+      const _dp = params._driftPhases || {};
+      const DB = params.DRIFT_BASE;
+
+      const rd = params.rotDriftScale
+        ? Math.sin(dt * TWO_PI / (DB * 0.92) + (_dp._rd || 0)) * params.rotDriftScale : 0;
+      const td = params.tiltDriftScale
+        ? Math.sin(dt * TWO_PI / (DB * 1.38) + 2.0 + (_dp._td || 0)) * params.tiltDriftScale : 0;
+
+      return {
+        rotY: params.elapsed * params.rotSpeedY * (params.arcMult.rot || 1) * (1.0 + rd) * (params.rotYMult || 1),
+        rotX: params.elapsed * params.rotSpeedX * params.rotXMult * (params.arcMult.rot || 1) * (1.0 + td),
+      };
+    }
+
+    // ── Position drift (from setFrameState L246-252) ──
+    function computePosDrift(params) {
+      // params: { elapsed, DRIFT_BASE, audioDuration, bakedFlux, _driftPhases, posDrift }
+      if (!params.posDrift) return { x: 0, y: 0, z: 0 };
+      const TWO_PI = Math.PI * 2;
+      const _ad = params.audioDuration || 0;
+      const _ds = _ad > 0 ? params.DRIFT_BASE / Math.max(12, Math.min(120, _ad * 0.4)) : 1;
+      const dt = params.elapsed * _ds;
+      const _dp = params._driftPhases || {};
+      const DB = params.DRIFT_BASE;
+      const pd = params.posDrift;
+      const driftAmt = pd.amt * (0.4 + params.bakedFlux * 0.8);
+      return {
+        x: Math.sin(dt * TWO_PI / (DB * pd.px) + (_dp._px || 0)) * driftAmt,
+        y: Math.sin(dt * TWO_PI / (DB * pd.py) + 1.7 + (_dp._py || 0)) * driftAmt * pd.ys,
+        z: pd.pz ? Math.sin(dt * TWO_PI / (DB * pd.pz) + 0.9 + (_dp._pz || 0)) * driftAmt * (pd.zs || 0.4) : 0,
+      };
+    }
+
+    // ── Scale breathing (from setFrameState L255-258) ──
+    function computeBreathe(params) {
+      // params: { elapsed, DRIFT_BASE, audioDuration, _driftPhases, breathe, arcMult }
+      if (!params.breathe) return 1.0;
+      const TWO_PI = Math.PI * 2;
+      const _ad = params.audioDuration || 0;
+      const _ds = _ad > 0 ? params.DRIFT_BASE / Math.max(12, Math.min(120, _ad * 0.4)) : 1;
+      const dt = params.elapsed * _ds;
+      const _dp = params._driftPhases || {};
+      const DB = params.DRIFT_BASE;
+      const br = params.breathe;
+      return 1.0 + Math.sin(dt * TWO_PI / (DB * br.period) + (_dp._br || 0)) * br.amp * (params.arcMult.rot || 1);
+    }
+
+    // ── Narrative arc interpolation ──
+    function applyArcScale(rawArc, bakedArcScale) {
+      const result = {};
+      for (const k in rawArc) {
+        result[k] = 1.0 + (rawArc[k] - 1.0) * bakedArcScale;
+      }
+      return result;
+    }
+
+    // ── Time scaling ──
+    function timeScale(DRIFT_BASE, audioDuration) {
+      const _ad = audioDuration || 0;
+      return _ad > 0 ? DRIFT_BASE / Math.max(12, Math.min(120, _ad * 0.4)) : 1;
+    }
+
+    window.__TEST = {
+      adjustedFov,
+      computeDrift,
+      computeRotation,
+      computePosDrift,
+      computeBreathe,
+      applyArcScale,
+      timeScale,
+      SQUARE_PSEUDO_ASPECT,
+    };
+  </script>
+</body>
+</html>
